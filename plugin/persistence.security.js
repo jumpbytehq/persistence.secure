@@ -1,35 +1,48 @@
-
-(function(){
-	if(!persistence){
-		alert("persistence library is not loaded");
-		return;
+var encryptKey = "encrypt - ";
+persistence.secure = {};
+persistence.secure.encrypt = function(type, field, fieldType, value){
+	if(fieldType == "TEXT"){
+		value = encryptKey + value;
 	}
 	
-	persistence.encrypt = function(obj, key){
-		if(!obj)
-			return;
-			
-		for(var p in obj._data) {
-			if(obj._data.hasOwnProperty(p)) {
-				console.log("property: " + p + " " + obj._data[p]);
-				
-				var data = Crypto.AES.encrypt(obj._data[p], key);
-				obj._data[p] = data;
-				
-				persistence.propertyChanged(obj, p, undefined, obj._data[p]);
+	return value;
+}
+
+persistence.secure.decrypt = function(type, field, fieldType, value){
+	if(fieldType == "TEXT"){
+		value = value.substr(encryptKey.length);
+	}
+	
+	return value;
+}
+
+persistence.Observable.prototype.toSecureJSON = function() {
+    var json = {id: this.id};
+    for(var p in this._data) {
+        if(this._data.hasOwnProperty(p)) {
+            if (typeof this._data[p] == "object" && this._data[p] != null) {
+				if (this._data[p].toJSON != undefined) {
+					json[p] = this[p].toJSON();
+				}
+            } else {
+				json[p] = this[p];
             }
         }
-	}
+    }
+    return json;
+}
+
+persistence.defineProp = function(scope, field, setterCallback, getterCallback) {
+	var fieldMap = persistence.getMeta(scope._type).fields;
 	
-	persistence.decrypt = function(obj, key){
-		if(!obj)
-			return;
-			
-		for(var p in obj._data) {
-			if(obj._data.hasOwnProperty(p)) {
-				var data = Crypto.AES.decrypt(obj._data[p], key);
-				obj._data[p] = data;
-            }
-        }	
-	}
-})()
+	scope.__defineSetter__(field, function(value) {
+		value = persistence.secure.encrypt(scope._type, field, fieldMap[field], value);
+		setterCallback(value);
+	});
+
+	scope.__defineGetter__(field, function() {
+		var value = getterCallback();
+		value = persistence.secure.decrypt(scope._type, field, fieldMap[field], value);
+		return value;
+	});
+}
